@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bizoforce Voice Agent</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Bizoforce Assistant</h1>
+        </header>
+        
+        <div id="chatLog">
+            <div class="msg ai-msg">Welcome, Thanush! I'm ready to help. Click the button below to start talking.</div>
+        </div>
+
+        <p id="status">Status: Ready</p>
+
+        <div class="controls">
+            <button id="recordBtn">
+                <span id="btnIcon">🎤</span>
+                <span id="btnText">Click to Talk</span>
+            </button>
+            <button id="stopBtn">
+                <span>⏹️</span> Stop AI
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+
+        const btn = document.getElementById('recordBtn');
+        const btnText = document.getElementById('btnText');
+        const btnIcon = document.getElementById('btnIcon');
+        const status = document.getElementById('status');
+        const chatLog = document.getElementById('chatLog');
+        const stopBtn = document.getElementById('stopBtn');
+
+        function addMessage(text, isUser) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `msg ${isUser ? 'user-msg' : 'ai-msg'}`;
+            msgDiv.innerText = text;
+            chatLog.appendChild(msgDiv);
+            chatLog.scrollTop = chatLog.scrollHeight;
+        }
+
+        stopBtn.onclick = () => {
+            window.speechSynthesis.cancel();
+            if (status.innerText === "SPEAKING...") {
+                status.innerText = "READY";
+            }
+            console.log("AI stopped.");
+        };
+
+        btn.onclick = async () => {
+            window.speechSynthesis.cancel();
+
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
+                    
+                    isRecording = true;
+                    btnText.innerText = "Listening...";
+                    btnIcon.innerText = "🛑";
+                    btn.classList.add('recording');
+                    status.innerText = "Recording in progress...";
+                    
+                    audioChunks = [];
+                    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+                    
+                    mediaRecorder.onstop = async () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'input.webm');
+
+                        status.innerText = "AI Processing...";
+                        
+                        try {
+                            const response = await fetch('/respond-to-voice', { method: 'POST', body: formData });
+                            if (!response.ok) throw new Error("Connection failed");
+
+                            const data = await response.json();
+
+                            if (data.userInput) addMessage(data.userInput, true);
+                            if (data.text) {
+                                addMessage(data.text, false);
+                                speakText(data.text);
+                            }
+                        } catch (err) {
+                            status.innerText = "Offline Mode";
+                            addMessage("Error: Could not reach the server.", false);
+                        }
+                    };
+                } catch (err) {
+                    status.innerText = "Mic Denied";
+                    addMessage("Please enable microphone access.", false);
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                btnText.innerText = "Click to Talk";
+                btnIcon.innerText = "🎤";
+                btn.classList.remove('recording');
+            }
+        };
+
+        function speakText(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            status.innerText = "Speaking...";
+            utterance.onend = () => status.innerText = "Ready";
+            window.speechSynthesis.speak(utterance);
+        }
+    </script>
+</body>
+</html>
