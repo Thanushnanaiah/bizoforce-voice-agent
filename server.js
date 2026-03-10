@@ -8,7 +8,7 @@ const Groq = require('groq-sdk');
 const app = express();
 
 // --- 1. ENSURE UPLOADS DIRECTORY EXISTS ---
-const uploadDir = 'uploads/';
+const uploadDir = '/tmp/';
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
